@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BIJ Versine Calculator</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b5cad">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BIJ Versine">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f4f5f7;--card:#fff;--text:#1a1d21;--muted:#5f6b7a;--border:#d5dae1;--accent:#0b5cad;--ok:#0a7a3d;--warn:#b45309;--res:#eaf2fb}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171b;--card:#1e2329;--text:#e8eaed;--muted:#9aa5b1;--border:#333b45;--accent:#5aa9f0;--ok:#4cc38a;--warn:#f0a94a;--res:#1a2a3a}}
+:root[data-theme="dark"]{--bg:#14171b;--card:#1e2329;--text:#e8eaed;--muted:#9aa5b1;--border:#333b45;--accent:#5aa9f0;--ok:#4cc38a;--warn:#f0a94a;--res:#1a2a3a}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+main{max-width:560px;margin:0 auto;padding:20px 16px 40px}
+[hidden]{display:none!important}
+h1{font-size:1.4rem;margin:0 0 4px}
+p.sub{margin:0 0 16px;color:var(--muted);font-size:.9rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+label{display:block;font-weight:600;font-size:.9rem;margin:0 0 6px}
+input,select{width:100%;box-sizing:border-box;font-size:1.05rem;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)}
+.row{margin-bottom:14px}
+.chk{display:flex;align-items:center;gap:8px;font-weight:400;margin-top:8px}
+.chk input{width:auto}
+.res{background:var(--res);border-color:var(--accent)}
+.big{font-size:2.4rem;font-weight:700;color:var(--accent);line-height:1.1}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--border);font-size:.95rem}
+.kv:last-child{border:0}
+.msg{color:var(--warn);font-weight:600}
+.note{font-size:.8rem;color:var(--muted)}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+th,td{border:1px solid var(--border);padding:6px 8px;text-align:left}
+tr.hit td{background:var(--res);font-weight:700}
+</style>
+</head>
+<body>
+<main>
+<h1>BIJ Versine Calculator</h1>
+<p class="sub">Bonded insulated joint configurations (Table 9)</p>
+
+<div class="card">
+  <div class="row">
+    <label for="mode">Method</label>
+    <select id="mode">
+      <option value="1">Single radius</option>
+      <option value="2">Interpolate between two radii</option>
+    </select>
+  </div>
+  <div class="row">
+    <label for="len">BIJ length</label>
+    <select id="len">
+      <option value="3.43">3.43 m</option>
+      <option value="4.57">4.57 m</option>
+    </select>
+  </div>
+  <div class="row">
+    <label for="rad" id="l1">Curve radius (m)</label>
+    <input id="rad" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 450">
+    <label class="chk"><input id="str" type="checkbox"> Straight track</label>
+  </div>
+  <div id="two" hidden>
+    <div class="row">
+      <label for="rad2">Radius 2 (m)</label>
+      <input id="rad2" type="number" inputmode="decimal" min="0" step="any" placeholder="e.g. 900">
+      <label class="chk"><input id="str2" type="checkbox"> Straight track</label>
+    </div>
+    <div class="row">
+      <label for="pos">Joint position between Radius 1 and Radius 2 (%)</label>
+      <input id="pos" type="number" inputmode="decimal" min="0" max="100" step="any" value="50">
+      <p class="note">0% = at Radius 1, 100% = at Radius 2. Curvature (1/R) is interpolated linearly, as for a transition.</p>
+    </div>
+  </div>
+</div>
+
+<div class="card res" id="out" aria-live="polite"></div>
+
+<div class="card">
+  <div class="tbl"><table id="tbl"></table></div>
+  <p class="note">Midordinate = L² ÷ (8 × R), where L is the BIJ length (chord) and R is the curve radius. This reproduces the table's midordinate values. Where a radius sits exactly on a band boundary (e.g. 326 m), the tighter-curve band is shown; confirm against your standard.</p>
+</div>
+</main>
+
+<script>
+const BANDS={
+ "3.43":[{min:196,max:326,v:6,mid:"7.5 – 4.5"},{min:326,max:980,v:3,mid:"4.5 – 1.5"},{min:980,max:Infinity,v:0,mid:"1.5 – 0"}],
+ "4.57":[{min:217,max:326,v:10,mid:"12.0 – 8.0"},{min:326,max:1305,v:5,mid:"8.0 – 2.0"},{min:1305,max:Infinity,v:0,mid:"2.0 – 0"}]
+};
+const $=id=>document.getElementById(id);
+function pick(len,R){
+  const b=BANDS[len];
+  if(R<b[0].min) return null;
+  for(let i=0;i<b.length;i++){ if(R>b[i].min&&R<=b[i].max) return i; if(i===0&&R===b[0].min) return 0; }
+  return b.length-1;
+}
+function render(){
+  const len=$("len").value, L=parseFloat(len), two=$("mode").value==="2";
+  $("two").hidden=!two;
+  $("l1").textContent=two?"Radius 1 (m)":"Curve radius (m)";
+  $("rad").disabled=$("str").checked; $("rad2").disabled=$("str2").checked;
+  const b=BANDS[len];
+  const rd=(rid,sid)=>$(sid).checked?Infinity:parseFloat($(rid).value);
+  const R1=rd("rad","str"), R2=two?rd("rad2","str2"):null;
+  const p=parseFloat($("pos").value)/100;
+  let idx=null,html="",valid=true;
+  if(!(R1>0)||(two&&!(R2>0))) valid=false;
+  if(two&&!(p>=0&&p<=1)) valid=false;
+  if(!valid){
+    html='<span class="note">Enter all values to see the result.</span>';
+  } else {
+    let R=R1, extra="";
+    if(two){
+      const k=(1/R1)+((1/R2)-(1/R1))*p;
+      R=k>0?1/k:Infinity;
+      extra=`<div class="kv"><span>Radius 1 → Radius 2</span><b>${R1===Infinity?"Straight":R1+" m"} → ${R2===Infinity?"Straight":R2+" m"}</b></div>
+      <div class="kv"><span>Position</span><b>${(p*100).toFixed(1)}%</b></div>
+      <div class="kv"><span>Interpolated radius</span><b>${R===Infinity?"Straight":R.toFixed(1)+" m"}</b></div>`;
+    }
+    const mid=R===Infinity?0:(L*L)/(8*R)*1000;
+    idx=R===Infinity?b.length-1:pick(len,R);
+    if(idx===null){
+      html=`<div class="msg">Radius is below the tabulated range (min ${b[0].min} m for a ${len} m BIJ).</div>${extra}
+      <div class="kv"><span>Calculated midordinate</span><b>${mid.toFixed(2)} mm</b></div>
+      <p class="note">No versine is specified in Table 9 for this radius.</p>`;
+    } else {
+      html=`<div class="note">Versine to be used</div>
+      <div class="big">${b[idx].v}</div>
+      <div style="margin-top:10px">
+      <div class="kv"><span>BIJ length</span><b>${len} m</b></div>
+      ${two?extra:`<div class="kv"><span>Curve radius</span><b>${R===Infinity?"Straight":R+" m"}</b></div>`}
+      <div class="kv"><span>Calculated midordinate</span><b>${mid.toFixed(2)} mm</b></div>
+      <div class="kv"><span>Table band (midordinate)</span><b>${b[idx].mid} mm</b></div></div>`;
+    }
+  }
+  $("out").innerHTML=html;
+  const lbl=x=>x===Infinity?"straight":x;
+  $("tbl").innerHTML=`<tr><th>Radius (m)</th><th>Midordinate (mm)</th><th>Versine</th></tr>`+
+    b.map((r,i)=>`<tr class="${i===idx?"hit":""}"><td>${r.min} – ${lbl(r.max)}</td><td>${r.mid}</td><td>${r.v}</td></tr>`).join("");
+}
+["mode","len","rad","str","rad2","str2","pos"].forEach(id=>$(id).addEventListener("input",render));
+render();
+if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
+</script>
+</body>
+</html>
